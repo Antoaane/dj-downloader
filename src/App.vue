@@ -1,30 +1,20 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
+import { RouterLink, RouterView } from 'vue-router'
 </script>
 
 <template>
-  <div>
-    <a href="https://vite.dev" target="_blank">
-      <img src="/vite.svg" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://vuejs.org/" target="_blank">
-      <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-    </a>
+  <div class="min-h-screen">
+    <div class="navbar bg-base-100 border-b">
+      <div class="flex-1">
+        <RouterLink to="/" class="btn btn-ghost normal-case text-xl">TIDAL Sync</RouterLink>
+      </div>
+      <div class="flex-none gap-2 pr-4">
+        <RouterLink to="/connect-spotify" class="btn btn-sm">Spotify</RouterLink>
+        <RouterLink to="/connect-tidal" class="btn btn-sm btn-primary">TIDAL</RouterLink>
+      </div>
+    </div>
+    <main class="container mx-auto p-4">
+      <RouterView />
+    </main>
   </div>
-  <HelloWorld msg="Vite + Vue" />
 </template>
-
-<style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
-}
-</style>
