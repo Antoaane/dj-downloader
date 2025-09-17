@@ -11,28 +11,19 @@ import {
 const clientId = import.meta.env.VITE_TIDAL_CLIENT_ID ?? ''
 const redirectUri =
   import.meta.env.VITE_TIDAL_REDIRECT ||
-  (import.meta.env.DEV
-    ? 'http://127.0.0.1:5173/connect-tidal'
-    : location.origin + '/connect-tidal')
+  (import.meta.env.DEV ? 'http://127.0.0.1:5173/connect-tidal' : location.origin + '/connect-tidal')
 
-// clé locale pour le stockage sécurisé du SDK
 const CRED_KEY = 'tidal_user_credentials'
 
-/** essaie d'extraire (token, expiresIn) depuis le format Credentials du SDK */
+// Essaie d'extraire { token, expiresIn } depuis les "Credentials" du SDK
 function pickToken(creds: any): { token: string; expiresIn: number } | null {
   if (!creds) return null
-  // cas 1: { token, expiresIn }
-  if (typeof creds.token === 'string' && typeof creds.expiresIn === 'number') {
-    return { token: creds.token, expiresIn: creds.expiresIn }
+  if (creds.accessToken?.token) {
+    return { token: creds.accessToken.token, expiresIn: Number(creds.accessToken.expiresIn ?? 3600) }
   }
-  // cas 2: { accessToken: { token, expiresIn } }
-  if (creds.accessToken && typeof creds.accessToken.token === 'string') {
-    return {
-      token: creds.accessToken.token,
-      expiresIn: Number(creds.accessToken.expiresIn ?? 3600),
-    }
+  if (typeof creds.token === 'string') {
+    return { token: creds.token, expiresIn: Number(creds.expiresIn ?? 3600) }
   }
-  // cas 3: token direct (string)
   if (typeof creds === 'string') {
     return { token: creds, expiresIn: 3600 }
   }
@@ -42,45 +33,48 @@ function pickToken(creds: any): { token: string; expiresIn: number } | null {
 export function useAuthTidal() {
   const { setTidalToken } = useAppStore()
 
-  /** Débute le login (PKCE) : redirige vers TIDAL */
+  /** Démarre le login (redirige vers TIDAL) */
   async function startLoginSdk() {
     await init({ clientId, credentialsStorageKey: CRED_KEY })
-    const loginUrl = await initializeLogin({ redirectUri }) // <- string
-    window.location.href = loginUrl
+    const url = await initializeLogin({ redirectUri })
+    window.location.href = url
   }
 
-  /** À appeler sur /connect-tidal après retour de TIDAL (query ?code=...) */
+  /** À appeler sur /connect-tidal après retour (avec ?code=...) */
   async function finishLoginSdk() {
     await init({ clientId, credentialsStorageKey: CRED_KEY })
-    await finalizeLogin(window.location.search) // passe TOUTE la query
+    await finalizeLogin(window.location.search)
     const creds = await credentialsProvider.getCredentials()
     const picked = pickToken(creds)
-    if (picked) {
-      setTidalToken(picked.token, picked.expiresIn)
-      history.replaceState({}, '', location.pathname) // clean URL
-    } else {
-      throw new Error('Impossible de lire le token depuis credentialsProvider')
-    }
+    if (!picked) throw new Error('Credentials TIDAL invalides')
+    setTidalToken(picked.token, picked.expiresIn)
+    history.replaceState({}, '', location.pathname)
   }
 
-  /** Récupère un token frais depuis le provider (refresh géré en interne) */
-  async function getFreshToken() {
+  /**
+   * 🔑 Fournit un token frais depuis le SDK (et met à jour le store).
+   * À utiliser par les interceptors Axios (401, etc.).
+   */
+  async function getFreshToken(): Promise<string> {
     await init({ clientId, credentialsStorageKey: CRED_KEY })
     const creds = await credentialsProvider.getCredentials()
     const picked = pickToken(creds)
-    if (!picked) throw new Error('Credentials invalides')
+    if (!picked) throw new Error('Impossible de récupérer un token TIDAL')
     setTidalToken(picked.token, picked.expiresIn)
     return picked.token
+  }
+
+  /** Bootstrap au démarrage (si l’utilisateur était déjà loggé) */
+  async function bootstrapTidalToken() {
+    await init({ clientId, credentialsStorageKey: CRED_KEY })
+    const creds = await credentialsProvider.getCredentials().catch(() => null)
+    const picked = pickToken(creds)
+    if (picked) setTidalToken(picked.token, picked.expiresIn)
   }
 
   async function signOut() {
     await logout()
   }
 
-  // mode DEV: tu colles un token à la main
-  async function setManualToken(token: string, expiresInSec = 3600) {
-    setTidalToken(token, expiresInSec)
-  }
-
-  return { startLoginSdk, finishLoginSdk, getFreshToken, signOut, setManualToken }
+  return { startLoginSdk, finishLoginSdk, getFreshToken, bootstrapTidalToken, signOut }
 }
