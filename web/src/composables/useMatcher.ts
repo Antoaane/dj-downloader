@@ -3,12 +3,14 @@ import { normalizeTitle, artistsKey } from '../utils/text'
 
 // --- Normalisation utils ---
 const asciiMap: Record<string, string> = { 'é':'e','è':'e','ê':'e','ë':'e','à':'a','â':'a','ä':'a','î':'i','ï':'i','ô':'o','ö':'o','ù':'u','û':'u','ü':'u','ç':'c' }
-function toAscii(s: string) {
+function toAscii(s?: string) {
+  if (!s) return ''
   return s.normalize('NFKD')
     .replace(/[^\w\s\-()&']/g, m => asciiMap[m] ?? '')
     .replace(/[\u0300-\u036f]/g, '')
 }
-function cleanTitle(raw: string) {
+function cleanTitle(raw?: string) {
+  if (!raw) return ''
   let s = raw
   s = s.replace(/\s*[-–—]\s*(single|album)?\s*version.*$/i,'')
        .replace(/\s*\((feat\.?|with|remaster(ed)?( \d{2,4})?|live|radio edit|extended|instrumental|mono|stereo|acoustic|clean|dirty|sped up|slowed).*?\)\s*/gi,' ')
@@ -42,9 +44,9 @@ function ratio(a: string, b: string) {
 // --- Scoring détaillé ---
 type ScoreInfo = { score: number; titleSim: number; artistScore: number; durOk: boolean }
 export function scoreCandidate(src: Track, cand: Track): ScoreInfo {
-  const titleA = cleanTitle(src.title)
-  const titleB = cleanTitle(cand.title)
-  const artistsA = new Set(cleanArtistList(src.artists))
+  const titleA = cleanTitle(src.title || '')
+  const titleB = cleanTitle(cand.title || '')
+  const artistsA = new Set(cleanArtistList(src.artists || []))
   const artistsB = new Set(cleanArtistList(cand.artists || []))
 
   const titleSim = ratio(titleA, titleB)

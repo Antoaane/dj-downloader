@@ -1,60 +1,58 @@
-import { Router } from 'express'
-import { spawn } from 'child_process'
-import fs from 'node:fs/promises'
-import path from 'node:path'
+// server/routes/tidal.js
+import express from 'express'
+import axios from 'axios'
 
-const router = Router()
+const router = express.Router()
+const BASE_URL = 'https://openapi.tidal.com/v2'
 
-const QUAL = new Set(['Normal','High','HiFi','Master'])
-const OUTPUT_BASE = process.env.OUTPUT_BASE || 'downloads'
-const WORKDIR = process.env.WORKDIR || path.resolve('./work')
-const TIDAL_CMD = process.env.TIDAL_CMD || 'tidal-dl'
+// Proxy recherche par mots-clés
+router.get('/search', async (req, res) => {
+  try {
+    const { q, countryCode = 'FR' } = req.query
+    if (!q) return res.status(400).json({ error: 'Missing q param' })
 
-// Sanitize très basique pour dossiers
-const ILLEGAL = /[<>:"/\\|?*\u0000-\u001F]/g
-const sanitize = s => String(s).replace(ILLEGAL, '_').trim()
+    const token = req.headers['authorization']?.replace('Bearer ', '')
+    if (!token) return res.status(401).json({ error: 'Missing TIDAL token' })
 
-async function writeLinksFile(links) {
-  await fs.mkdir(WORKDIR, { recursive: true })
-  const file = path.join(WORKDIR, `links-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`)
-  await fs.writeFile(file, links.join('\n'), 'utf8')
-  return file
-}
+    const url = `${BASE_URL}/searchResults/${encodeURIComponent(q)}`
+    console.log('[TIDAL-BACK][search] URL:', url, 'params:', { countryCode, include: 'tracks', explicitFilter: 'include,exclude' })
 
-function spawnJob({ quality, listPath, output }) {
-  const args = (TIDAL_CMD === 'py')
-    ? ['-m', 'tidal_dl', '-q', quality, '-l', listPath, '-o', output]
-    : ['-q', quality, '-l', listPath, '-o', output]
+    const r = await axios.get(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.api+json' },
+      params: { countryCode, include: 'tracks', explicitFilter: 'include,exclude' }
+    })
 
-  const child = spawn(TIDAL_CMD, args, { stdio: 'ignore', shell: false })
-  child.on('close', async () => {
-    try { await fs.unlink(listPath) } catch {}
-  })
-}
-
-router.post('/jobs', async (req, res) => {
-  const jobs = Array.isArray(req.body?.jobs) ? req.body.jobs : []
-  if (!jobs.length) return res.status(400).json({ error: 'no jobs' })
-
-  const accepted = []
-  for (const raw of jobs) {
-    const quality = String(raw.quality || '').trim()
-    const links = Array.isArray(raw.links) ? raw.links.filter(Boolean) : []
-    const out = sanitize(raw.output || OUTPUT_BASE)
-
-    if (!QUAL.has(quality)) continue
-    if (!links.length) continue
-    if (out.includes('..')) continue
-
-    // Assure l’existence du dossier de sortie
-    await fs.mkdir(out, { recursive: true })
-
-    const listPath = await writeLinksFile(links)
-    spawnJob({ quality, listPath, output: out })
-    accepted.push({ quality, output: out, count: links.length })
+    console.log('[TIDAL-BACK][search] response status:', r.status)
+    res.json(r.data)
+  } catch (err) {
+    console.error('[TIDAL-BACK][search] error:', err.response?.data || err.message)
+    res.status(err.response?.status || 500).json(err.response?.data || { error: err.message })
   }
+})
 
-  res.json({ accepted: accepted.length, details: accepted })
+// Proxy recherche par ISRC
+router.get('/tracks', async (req, res) => {
+  try {
+    const { isrc, countryCode = 'FR' } = req.query
+    if (!isrc) return res.status(400).json({ error: 'Missing isrc param' })
+
+    const token = req.headers['authorization']?.replace('Bearer ', '')
+    if (!token) return res.status(401).json({ error: 'Missing TIDAL token' })
+
+    const url = `${BASE_URL}/searchResults/${encodeURIComponent(isrc)}`
+    console.log('[TIDAL-BACK][tracks] URL:', url, 'params:', { countryCode, include: 'tracks', explicitFilter: 'include,exclude' })
+
+    const r = await axios.get(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.api+json' },
+      params: { countryCode, include: 'tracks', explicitFilter: 'include,exclude' }
+    })
+
+    console.log('[TIDAL-BACK][tracks] response status:', r.status)
+    res.json(r.data)
+  } catch (err) {
+    console.error('[TIDAL-BACK][tracks] error:', err.response?.data || err.message)
+    res.status(err.response?.status || 500).json(err.response?.data || { error: err.message })
+  }
 })
 
 export default router

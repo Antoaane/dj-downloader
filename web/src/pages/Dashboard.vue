@@ -170,15 +170,15 @@ async function sendCommands() {
 }
 
 onMounted(async () => {
+  // DEBUG tokens au mount
+  console.log('[DEBUG] Spotify token:', state.spotify.accessToken)
+  console.log('[DEBUG] Spotify expiresAt:', new Date(state.spotify.expiresAt).toISOString())
+  console.log('[DEBUG] TIDAL token:', state.tidal.accessToken)
+  console.log('[DEBUG] TIDAL expiresAt:', new Date(state.tidal.expiresAt).toISOString())
+
   if (state.spotify.accessToken) {
     await Promise.all([loadProfileName(), loadPlaylists()])
   }
-
-  console.log('[DEBUG] Spotify token:', state.spotify.accessToken)
-  console.log('[DEBUG] Spotify expiresAt:', new Date(state.spotify.expiresAt).toISOString())
-  console.log('[DEBUG] Tidal token: "',state.tidal.accessToken,'"')
-  console.log('[DEBUG] Tidal expiresAt:', new Date(state.tidal.expiresAt).toISOString())
-
 })
 watch(() => state.spotify.accessToken, async (t) => {
   if (t) await Promise.all([loadProfileName(), loadPlaylists()])
@@ -284,7 +284,7 @@ watch(() => state.spotify.accessToken, async (t) => {
             {{ fetchingTracks ? 'Analyse…' : 'Dry-run' }}
           </button>
 
-          <button class="btn btn-primary" :disabled="!selectedCount || fetchingTracks || !state.tidal.accessToken"
+          <button class="btn btn-primary" :disabled="!selectedCount || fetchingTracks"
             @click="sendCommands">
             {{ fetchingTracks ? 'Préparation…' : 'Envoyer commandes' }}
           </button>
